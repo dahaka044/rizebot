@@ -9,12 +9,12 @@ from threading import Lock
 from flask import Flask
 import threading
 
-# Flask web sunucusu
+# -------------------- FLASK SUNUCUSU --------------------
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Bot çalışıyor! 🚀"
+    return "🟢 Bot Aktif | " + datetime.now(pytz.timezone('Europe/Istanbul')).strftime("%H:%M:%S")
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -22,107 +22,179 @@ def run_flask():
 # -------------------- ORTAM DEĞİŞKENLERİ --------------------
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-RIZE_ROLE_ID = os.getenv("RIZE_ROLE_ID")
-CHANNEL_ID = os.getenv("CHANNEL_ID")
+RIZE_ROLE_ID = int(os.getenv("RIZE_ROLE_ID"))
+CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
+
 # -------------------- GLOBAL AYARLAR --------------------
-IST = pytz.timezone('Europe/Istanbul')  # Türkiye saat dilimi
-notification_lock = Lock()  # Çoklu bildirim engelleme
+IST = pytz.timezone('Europe/Istanbul')
+notification_lock = Lock()
 
 # -------------------- DISCORD BOT AYARLARI --------------------
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# -------------------- ETKİNLİK VERİLERİ --------------------
+# -------------------- ETKİNLİK VERİLERİ (RESİM LİNKLERİYLE) --------------------
 EVENT_DATA = {
-    "BDW": {"img": "https://prnt.sc/IwzCXuokYbao", "schedule": [2, 14, 20]},
-    "Death Match": {"img": "https://prnt.sc/ByWI6D6hmWaY", "schedule": [3, 11, 17]},
-    "At Yarışı": {"img": "https://prnt.sc/0W62i1Z_PIiw", "schedule": [6, 10, 15, 18]},
-    "Inferno Temple": {"img": "https://prnt.sc/7Pb7YHC9IbJ8", "schedule": [8, 20.5]},  # 20.5 = 20:30
-    "Davulcu": {"img": "https://prnt.sc/ZehgOBYmzYxD", "schedule": [23]}
+    "BDW": {
+        "img": "https://prnt.sc/IwzCXuokYbao",
+        "schedule": [2, 14, 20],
+        "emoji": "⚔️",
+        "color": 0xff0000
+    },
+    "Death Match": {
+        "img": "https://prnt.sc/ByWI6D6hmWaY",
+        "schedule": [3, 11, 17],
+        "emoji": "💀",
+        "color": 0x000000
+    },
+    "At Yarışı": {
+        "img": "https://prnt.sc/0W62i1Z_PIiw",
+        "schedule": [6, 10, 15, 18],
+        "emoji": "🏇",
+        "color": 0x00ff00
+    },
+    "Inferno Temple": {
+        "img": "https://prnt.sc/7Pb7YHC9IbJ8",
+        "schedule": [8, 20.5],
+        "emoji": "🔥",
+        "color": 0xff4500
+    },
+    "Davulcu": {
+        "img": "https://prnt.sc/ZehgOBYmzYxD",
+        "schedule": [23],
+        "emoji": "🥁",
+        "color": 0x800080
+    }
 }
 
 # -------------------- YARDIMCI FONKSİYONLAR --------------------
 def create_event_list():
-    """EVENT_TIMES listesini dinamik olarak oluşturur"""
     events = []
     for event_name, data in EVENT_DATA.items():
         for time in data["schedule"]:
             hour = int(time)
             minute = 30 if (time % 1 != 0) else 0
-            events.append({"name": event_name, "hour": hour, "minute": minute})
+            events.append({
+                "name": event_name,
+                "hour": hour,
+                "minute": minute,
+                "emoji": data["emoji"],
+                "img": data["img"],
+                "color": data["color"]
+            })
     return events
 
 EVENT_TIMES = create_event_list()
 
 # -------------------- BİLDİRİM SİSTEMİ --------------------
 async def send_notification(event):
-    """Discord"""
     with notification_lock:
         try:
-            # Discord Embed
+            now = datetime.now(IST)
+            event_time = IST.localize(datetime(
+                now.year, now.month, now.day,
+                event["hour"], event["minute"]
+            ))
+            
+            if event_time < now:
+                event_time += timedelta(days=1)
+            
             embed = discord.Embed(
-                title=f"🚨 {event['name']} Yaklaşıyor!",
-                description=f"**30 Dakika Sonra Başlıyor!**\n`🕒 {event['hour']:02d}:{event['minute']:02d}`",
-                color=0x00ff00
+                title=f"{event['emoji']} {event['name']} Yaklaşıyor!",
+                description=f"**30 Dakika Sonra Başlıyor!**\n`🕒 {event_time.strftime('%H:%M')}`",
+                color=event["color"]
             )
-            embed.set_image(url=EVENT_DATA[event["name"]]["img"])
+            embed.set_image(url=event["img"])
             
             channel = bot.get_channel(CHANNEL_ID)
             rize_role = channel.guild.get_role(RIZE_ROLE_ID)
-            await channel.send(f"{rize_role.mention} 🔔", embed=embed)                
+            await channel.send(f"{rize_role.mention} 🔔", embed=embed)
+            
         except Exception as e:
-            print(f"❌ Bildirim Hatası: {str(e)}")
+            print(f"❌ Hata: {str(e)}")
 
 # -------------------- ZAMAN KONTROL MEKANİZMASI --------------------
 async def event_checker():
-    """Etkinlikleri kontrol eden ana döngü"""
     await bot.wait_until_ready()
-    
     while not bot.is_closed():
         try:
             now = datetime.now(IST)
             for event in EVENT_TIMES:
-                # Etkinlik zamanını İstanbul saatine göre oluştur
                 event_time = IST.localize(datetime(
-                    now.year, 
-                    now.month, 
-                    now.day, 
-                    event["hour"], 
-                    event["minute"]
+                    now.year, now.month, now.day,
+                    event["hour"], event["minute"]
                 ))
                 
-                # 30 dakika öncesini hesapla
+                if event_time < now:
+                    event_time += timedelta(days=1)
+                
                 reminder_time = event_time - timedelta(minutes=30)
                 
-                # Hassas zaman kontrolü (±10 saniye)
-                if (reminder_time - timedelta(seconds=10)) <= now <= (reminder_time + timedelta(seconds=10)):
+                if (reminder_time - timedelta(seconds=30)) <= now <= (reminder_time + timedelta(seconds=30)):
                     await send_notification(event)
             
-            await asyncio.sleep(15)  # 15 saniyede bir kontrol
+            await asyncio.sleep(10)
             
         except Exception as e:
-            print(f"❌ Kontrol Döngüsü Hatası: {str(e)}")
-            await asyncio.sleep(30)
+            print(f"❌ Kontrol Hatası: {str(e)}")
 
-# -------------------- KOMUTLAR --------------------
+# -------------------- YENİ !takvim KOMUTU --------------------
+@bot.command()
+async def takvim(ctx):
+    """Özel tasarımlı etkinlik takvimi"""
+    embed = discord.Embed(
+        title="🎉 **RİSE ONLINE ETKİNLİK TAKVİMİ** 🎉",
+        description="```fix\nAşağıdaki etkinlikler her gün tekrarlanır!```",
+        color=0x7289da
+    )
+    
+    current_time = datetime.now(IST).strftime("%d/%m/%Y %H:%M")
+    
+    for event_name, data in EVENT_DATA.items():
+        times = []
+        for time in data["schedule"]:
+            hour = int(time)
+            minute = "30" if (time % 1 != 0) else "00"
+            times.append(f"{hour:02d}:{minute}")
+            
+        field_value = (
+            f"{data['emoji']} **Saatler:** ||`{' | '.join(times)}`||\n"
+            f"🔗 **Resim:** [Görüntüle]({data['img']})"
+        )
+        
+        embed.add_field(
+            name=f"**{event_name}**",
+            value=field_value,
+            inline=False
+        )
+    
+    embed.set_thumbnail(url="https://i.imgur.com/8KZfW3G.png")  # Özel thumbnail
+    embed.set_footer(text=f"🕒 Türkiye Saati: {current_time}")
+    
+    await ctx.send(embed=embed)
+
+# -------------------- DİĞER KOMUTLAR --------------------
 @bot.event
 async def on_ready():
-    """Bot hazır olduğunda çalışır"""
     print(f'✅ {bot.user.name} çevrimiçi!')
-    await bot.change_presence(activity=discord.Game(name="Rise Online"))
+    await bot.change_presence(activity=discord.Game(name="Rise Online | !takvim"))
     bot.loop.create_task(event_checker())
 
 @bot.command()
 async def test(ctx):
-    """Manuel test komutu"""
-    test_event = {"name": "TEST", "hour": 23, "minute": 59}
+    test_event = {
+        "name": "TEST",
+        "hour": datetime.now(IST).hour,
+        "minute": (datetime.now(IST).minute + 2) % 60,
+        "emoji": "⚠️",
+        "img": "https://i.imgur.com/8KZfW3G.png",
+        "color": 0xffff00
+    }
     await send_notification(test_event)
     await ctx.send("✅ Test bildirimi gönderildi!")
 
-
 # -------------------- BAŞLATMA --------------------
 if __name__ == "__main__":
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.start()
-    bot.run(os.getenv("DISCORD_TOKEN"))
+    threading.Thread(target=run_flask, daemon=True).start()
+    bot.run(DISCORD_TOKEN)
