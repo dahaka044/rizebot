@@ -97,7 +97,6 @@ async def send_notification(event):
                 event["hour"], event["minute"]
             ))
             
-            # Ertesi gün kontrolü
             if event_time < now:
                 event_time += timedelta(days=1)
             
@@ -143,47 +142,58 @@ async def event_checker():
 # -------------------- GÜNCELLENMİŞ !takvim KOMUTU --------------------
 @bot.command()
 async def takvim(ctx):
-    """Aynı gün içindeki etkinlikleri gösterir"""
+    """Günün kalan etkinliklerini görsel olarak listeler"""
     now = datetime.now(IST)
-    start_hour = now.hour
-    start_minute = now.minute
     
-    embed = discord.Embed(
-        title=f"🎮 **{now.strftime('%d/%m')} Günlük Etkinlik Takvimi** 🎮",
-        description=f"**{start_hour:02d}:{start_minute:02d} - 23:59** arası etkinlikler:",
+    # Ana Embed
+    main_embed = discord.Embed(
+        title=f"🎮 **{now.strftime('%d/%m')} GÜNLÜK ETKİNLİK TAKVİMİ** 🎮",
+        description=f"⏳ **{now.strftime('%H:%M')} - 23:59** arası planlanan etkinlikler:",
         color=0x7289da
     )
+    main_embed.set_thumbnail(url="https://i.imgur.com/8KZfW3G.png")
     
-    events_added = False
+    # Etkinlik Embed'leri
+    event_embeds = []
+    
     for event in EVENT_TIMES:
         event_time = IST.localize(datetime(
             now.year, now.month, now.day,
             event["hour"], event["minute"]
         ))
         
-        # Ertesi gün etkinliklerini filtrele
         if event_time < now:
             continue
         
-        # Saat aralığı kontrolü
-        if event["hour"] >= start_hour:
-            time_str = event_time.strftime("%H:%M")
-            field_value = (
-                f"{event['emoji']} **Saat:** ||`{time_str}`||\n"
-                f"🔗 **Resim:** [Görüntüle]({event['img']})"
-            )
-            embed.add_field(
-                name=f"**{event['name']}**",
-                value=field_value,
-                inline=False
-            )
-            events_added = True
-    
-    if not events_added:
-        embed.description = "⏳ **Bugün başlayacak başka etkinlik yok**"
+        # Etkinlik Embed'i
+        embed = discord.Embed(
+            title=f"{event['emoji']} {event['name']}",
+            color=event["color"]
+        )
+        embed.add_field(
+            name="⏰ **BAŞLAMA SAATİ**",
+            value=f"```fix\n{event_time.strftime('%H:%M')}```",
+            inline=False
+        )
+        embed.set_image(url=event["img"])
+        embed.set_footer(text=f"⏳ Kalan süre: {str(event_time - now).split('.')[0]}")
         
-    embed.set_footer(text=f"🕒 Türkiye Saati: {now.strftime('%H:%M:%S')}")
-    await ctx.send(embed=embed)
+        event_embeds.append((event_time, embed))
+    
+    if not event_embeds:
+        main_embed.description = "🎉 **Bugün başka etkinlik yok!**"
+        await ctx.send(embed=main_embed)
+        return
+    
+    # Etkinlikleri sırala
+    event_embeds.sort(key=lambda x: x[0])
+    
+    # Ana mesajı gönder
+    await ctx.send(embed=main_embed)
+    
+    # Etkinlikleri gönder
+    for _, embed in event_embeds:
+        await ctx.send(embed=embed)
 
 # -------------------- GÜNCELLENMİŞ !test KOMUTU --------------------
 @bot.command()
@@ -197,7 +207,7 @@ async def test(ctx):
         "hour": test_time.hour,
         "minute": test_time.minute,
         "emoji": "⚠️",
-        "img": "https://prnt.sc/eOcmjYQJ5k6m",
+        "img": "https://i.imgur.com/8KZfW3G.png",
         "color": 0xffff00
     }
     
