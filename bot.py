@@ -9,10 +9,9 @@ from threading import Lock
 
 # -------------------- ORTAM DEĞİŞKENLERİ --------------------
 load_dotenv()
-DISCORD_TOKEN = int(os.environ["DISCORD_TOKEN"])
-RIZE_ROLE_ID = int(os.environ["RIZE_ROLE_ID"])
-CHANNEL_ID = int(os.environ["CHANNEL_ID"])
-
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+RIZE_ROLE_ID = os.getenv("RIZE_ROLE_ID")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
 # -------------------- GLOBAL AYARLAR --------------------
 IST = pytz.timezone('Europe/Istanbul')  # Türkiye saat dilimi
 notification_lock = Lock()  # Çoklu bildirim engelleme
