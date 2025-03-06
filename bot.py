@@ -9,7 +9,7 @@ from threading import Lock
 
 # -------------------- ORTAM DEĞİŞKENLERİ --------------------
 load_dotenv()
-DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
+DISCORD_TOKEN = int(os.environ["DISCORD_TOKEN"])
 RIZE_ROLE_ID = int(os.environ["RIZE_ROLE_ID"])
 CHANNEL_ID = int(os.environ["CHANNEL_ID"])
 
