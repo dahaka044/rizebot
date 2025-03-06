@@ -14,7 +14,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🟢 Bot Aktif | " + datetime.now(pytz.timezone('Europe/Istanbul')).strftime("%H:%M:%S")
+    return "🟢 Bot Aktif | " + datetime.now(pytz.timezone('Europe/Istanbul')).strftime("%d/%m %H:%M")
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -34,7 +34,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# -------------------- ETKİNLİK VERİLERİ (RESİM LİNKLERİYLE) --------------------
+# -------------------- ETKİNLİK VERİLERİ --------------------
 EVENT_DATA = {
     "BDW": {
         "img": "https://prnt.sc/IwzCXuokYbao",
@@ -97,6 +97,7 @@ async def send_notification(event):
                 event["hour"], event["minute"]
             ))
             
+            # Ertesi gün kontrolü
             if event_time < now:
                 event_time += timedelta(days=1)
             
@@ -139,62 +140,77 @@ async def event_checker():
         except Exception as e:
             print(f"❌ Kontrol Hatası: {str(e)}")
 
-# -------------------- YENİ !takvim KOMUTU --------------------
+# -------------------- GÜNCELLENMİŞ !takvim KOMUTU --------------------
 @bot.command()
 async def takvim(ctx):
-    """Özel tasarımlı etkinlik takvimi"""
+    """Aynı gün içindeki etkinlikleri gösterir"""
+    now = datetime.now(IST)
+    start_hour = now.hour
+    start_minute = now.minute
+    
     embed = discord.Embed(
-        title="🎉 **RİSE ONLINE ETKİNLİK TAKVİMİ** 🎉",
-        description="```fix\nAşağıdaki etkinlikler her gün tekrarlanır!```",
+        title=f"🎮 **{now.strftime('%d/%m')} Günlük Etkinlik Takvimi** 🎮",
+        description=f"**{start_hour:02d}:{start_minute:02d} - 23:59** arası etkinlikler:",
         color=0x7289da
     )
     
-    current_time = datetime.now(IST).strftime("%d/%m/%Y %H:%M")
-    
-    for event_name, data in EVENT_DATA.items():
-        times = []
-        for time in data["schedule"]:
-            hour = int(time)
-            minute = "30" if (time % 1 != 0) else "00"
-            times.append(f"{hour:02d}:{minute}")
-            
-        field_value = (
-            f"{data['emoji']} **Saatler:** ||`{' | '.join(times)}`||\n"
-            f"🔗 **Resim:** [Görüntüle]({data['img']})"
-        )
+    events_added = False
+    for event in EVENT_TIMES:
+        event_time = IST.localize(datetime(
+            now.year, now.month, now.day,
+            event["hour"], event["minute"]
+        ))
         
-        embed.add_field(
-            name=f"**{event_name}**",
-            value=field_value,
-            inline=False
-        )
+        # Ertesi gün etkinliklerini filtrele
+        if event_time < now:
+            continue
+        
+        # Saat aralığı kontrolü
+        if event["hour"] >= start_hour:
+            time_str = event_time.strftime("%H:%M")
+            field_value = (
+                f"{event['emoji']} **Saat:** ||`{time_str}`||\n"
+                f"🔗 **Resim:** [Görüntüle]({event['img']})"
+            )
+            embed.add_field(
+                name=f"**{event['name']}**",
+                value=field_value,
+                inline=False
+            )
+            events_added = True
     
-    embed.set_thumbnail(url="https://i.imgur.com/8KZfW3G.png")  # Özel thumbnail
-    embed.set_footer(text=f"🕒 Türkiye Saati: {current_time}")
-    
+    if not events_added:
+        embed.description = "⏳ **Bugün başlayacak başka etkinlik yok**"
+        
+    embed.set_footer(text=f"🕒 Türkiye Saati: {now.strftime('%H:%M:%S')}")
     await ctx.send(embed=embed)
 
-# -------------------- DİĞER KOMUTLAR --------------------
+# -------------------- GÜNCELLENMİŞ !test KOMUTU --------------------
+@bot.command()
+async def test(ctx):
+    """2 dakika sonrasına test bildirimi gönderir"""
+    now = datetime.now(IST)
+    test_time = now + timedelta(minutes=2)
+    
+    test_event = {
+        "name": "TEST ETKİNLİK",
+        "hour": test_time.hour,
+        "minute": test_time.minute,
+        "emoji": "⚠️",
+        "img": "https://prnt.sc/eOcmjYQJ5k6m",
+        "color": 0xffff00
+    }
+    
+    await send_notification(test_event)
+    await ctx.send(f"✅ **{test_time.strftime('%H:%M')}** saatine test bildirimi ayarlandı!")
+
+# -------------------- BOT BAŞLATMA --------------------
 @bot.event
 async def on_ready():
     print(f'✅ {bot.user.name} çevrimiçi!')
     await bot.change_presence(activity=discord.Game(name="Rise Online | !takvim"))
     bot.loop.create_task(event_checker())
 
-@bot.command()
-async def test(ctx):
-    test_event = {
-        "name": "TEST",
-        "hour": datetime.now(IST).hour,
-        "minute": (datetime.now(IST).minute + 2) % 60,
-        "emoji": "⚠️",
-        "img": "https://i.imgur.com/8KZfW3G.png",
-        "color": 0xffff00
-    }
-    await send_notification(test_event)
-    await ctx.send("✅ Test bildirimi gönderildi!")
-
-# -------------------- BAŞLATMA --------------------
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
     bot.run(DISCORD_TOKEN)
