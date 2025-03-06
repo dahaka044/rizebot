@@ -26,7 +26,7 @@ RIZE_ROLE_ID = int(os.getenv("RIZE_ROLE_ID"))
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 
 # -------------------- GLOBAL AYARLAR --------------------
-IST = pytz.timezone('Europe/Istanbul')
+IST = pytz.timezone('Europe/Istanbul')  # Tüm zamanlar İstanbul'a göre
 notification_lock = Lock()
 
 # -------------------- DISCORD BOT AYARLARI --------------------
@@ -91,18 +91,18 @@ EVENT_TIMES = create_event_list()
 async def send_notification(event):
     with notification_lock:
         try:
-            now = datetime.now(IST)
+            now_ist = datetime.now(IST)
             event_time = IST.localize(datetime(
-                now.year, now.month, now.day,
+                now_ist.year, now_ist.month, now_ist.day,
                 event["hour"], event["minute"]
             ))
             
-            if event_time < now:
+            if event_time < now_ist:
                 event_time += timedelta(days=1)
             
             embed = discord.Embed(
                 title=f"{event['emoji']} {event['name']} Yaklaşıyor!",
-                description=f"**30 Dakika Sonra Başlıyor!**\n`🕒 {event_time.strftime('%H:%M')}`",
+                description=f"**30 Dakika Sonra Başlıyor!**\n`🕒 {event_time.strftime('%H:%M')} (TR Saati)`",
                 color=event["color"]
             )
             embed.set_image(url=event["img"])
@@ -119,36 +119,47 @@ async def event_checker():
     await bot.wait_until_ready()
     while not bot.is_closed():
         try:
-            now = datetime.now(IST)
+            now_ist = datetime.now(IST)
+            print(f"\n🔍 Kontrol Zamanı (TR): {now_ist.strftime('%d/%m %H:%M:%S')}")
+            
             for event in EVENT_TIMES:
+                # Etkinlik zamanını İstanbul'a göre oluştur
                 event_time = IST.localize(datetime(
-                    now.year, now.month, now.day,
+                    now_ist.year, now_ist.month, now_ist.day,
                     event["hour"], event["minute"]
                 ))
                 
-                if event_time < now:
+                # Ertesi gün kontrolü
+                if event_time < now_ist:
                     event_time += timedelta(days=1)
                 
+                # Hatırlatma zamanını hesapla
                 reminder_time = event_time - timedelta(minutes=30)
+                time_diff = (reminder_time - now_ist).total_seconds()
                 
-                if (reminder_time - timedelta(seconds=30)) <= now <= (reminder_time + timedelta(seconds=30)):
+                print(f"|__ {event['name']} | TR Saati: {event_time.strftime('%H:%M')} | Hatırlatma: {reminder_time.strftime('%H:%M:%S')} | Fark: {time_diff:.0f}s")
+                
+                # Hassas zaman kontrolü (±10 saniye)
+                if -10 <= time_diff <= 10:
+                    print(f"🚨 Bildirim tetiklendi: {event['name']}")
                     await send_notification(event)
             
-            await asyncio.sleep(10)
+            await asyncio.sleep(5)  # 5 saniyede bir kontrol
             
         except Exception as e:
             print(f"❌ Kontrol Hatası: {str(e)}")
+            await asyncio.sleep(10)
 
 # -------------------- GÜNCELLENMİŞ !takvim KOMUTU --------------------
 @bot.command()
 async def takvim(ctx):
-    """Günün kalan etkinliklerini görsel olarak listeler"""
-    now = datetime.now(IST)
+    """İstanbul saatine göre etkinlikleri listeler"""
+    now_ist = datetime.now(IST)
     
     # Ana Embed
     main_embed = discord.Embed(
-        title=f"🎮 **{now.strftime('%d/%m')} GÜNLÜK ETKİNLİK TAKVİMİ** 🎮",
-        description=f"⏳ **{now.strftime('%H:%M')} - 23:59** arası planlanan etkinlikler:",
+        title=f"🎮 **{now_ist.strftime('%d/%m')} GÜNLÜK ETKİNLİK TAKVİMİ** 🎮",
+        description=f"⏳ **{now_ist.strftime('%H:%M')} - 23:59 (TR Saati)** arası etkinlikler:",
         color=0x7289da
     )
     main_embed.set_thumbnail(url="https://i.imgur.com/8KZfW3G.png")
@@ -158,11 +169,14 @@ async def takvim(ctx):
     
     for event in EVENT_TIMES:
         event_time = IST.localize(datetime(
-            now.year, now.month, now.day,
+            now_ist.year, now_ist.month, now_ist.day,
             event["hour"], event["minute"]
         ))
         
-        if event_time < now:
+        if event_time < now_ist:
+            event_time += timedelta(days=1)
+        
+        if event_time.time() > datetime.strptime("23:59", "%H:%M").time():
             continue
         
         # Etkinlik Embed'i
@@ -171,13 +185,11 @@ async def takvim(ctx):
             color=event["color"]
         )
         embed.add_field(
-            name="⏰ **BAŞLAMA SAATİ**",
+            name="⏰ **BAŞLAMA SAATİ (TR)**",
             value=f"```fix\n{event_time.strftime('%H:%M')}```",
             inline=False
         )
         embed.set_image(url=event["img"])
-        embed.set_footer(text=f"⏳ Kalan süre: {str(event_time - now).split('.')[0]}")
-        
         event_embeds.append((event_time, embed))
     
     if not event_embeds:
@@ -194,25 +206,6 @@ async def takvim(ctx):
     # Etkinlikleri gönder
     for _, embed in event_embeds:
         await ctx.send(embed=embed)
-
-# -------------------- GÜNCELLENMİŞ !test KOMUTU --------------------
-@bot.command()
-async def test(ctx):
-    """2 dakika sonrasına test bildirimi gönderir"""
-    now = datetime.now(IST)
-    test_time = now + timedelta(minutes=2)
-    
-    test_event = {
-        "name": "TEST ETKİNLİK",
-        "hour": test_time.hour,
-        "minute": test_time.minute,
-        "emoji": "⚠️",
-        "img": "https://i.imgur.com/8KZfW3G.png",
-        "color": 0xffff00
-    }
-    
-    await send_notification(test_event)
-    await ctx.send(f"✅ **{test_time.strftime('%H:%M')}** saatine test bildirimi ayarlandı!")
 
 # -------------------- BOT BAŞLATMA --------------------
 @bot.event
