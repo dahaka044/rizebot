@@ -6,6 +6,18 @@ from dotenv import load_dotenv
 import os
 import pytz
 from threading import Lock
+from flask import Flask
+import threading
+
+# Flask web sunucusu
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot çalışıyor! 🚀"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=8080)
 
 # -------------------- ORTAM DEĞİŞKENLERİ --------------------
 load_dotenv()
@@ -108,7 +120,9 @@ async def test(ctx):
     await send_notification(test_event)
     await ctx.send("✅ Test bildirimi gönderildi!")
 
+
 # -------------------- BAŞLATMA --------------------
-if __name__ == "__main__":    
-    # Discord botunu çalıştır
-    bot.run(DISCORD_TOKEN)
+if __name__ == "__main__":
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+    bot.run(os.getenv("DISCORD_TOKEN"))
