@@ -1,0 +1,32 @@
+{
+    "BDW": {
+        "img": "https://imgur.com/Rt3sTYO",
+        "schedule": [2, 14, 20],
+        "emoji": "⚔️",
+        "color": "0xff0000"
+    },
+    "Death Match": {
+        "img": "https://imgur.com/R2WcUVF",
+        "schedule": [3, 11, 17],
+        "emoji": "💀",
+        "color": "0x000000"
+    },
+    "At Yarışı": {
+        "img": "https://imgur.com/on19GMj",
+        "schedule": [6, 10, 15, 18],
+        "emoji": "🏇",
+        "color": "0x00ff00"
+    },
+    "Inferno Temple": {
+        "img": "https://imgur.com/f73DIhd",
+        "schedule": [8, 20.5],
+        "emoji": "🔥",
+        "color": "0xff4500"
+    },
+    "Davulcu": {
+        "img": "https://imgur.com/aHpsknn",
+        "schedule": [23],
+        "emoji": "🥁",
+        "color": "0x800080"
+    }
+}
